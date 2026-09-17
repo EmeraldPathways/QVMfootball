@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788644807381,
+      "tag": "0000_new_fenris",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788648382182,
+      "tag": "0001_nifty_giant_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788651999136,
+      "tag": "0002_lyrical_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788652959338,
+      "tag": "0003_robust_green_goblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788697510772,
+      "tag": "0005_chemical_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788949359890,
+      "tag": "0005_organic_agent_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789230329788,
+      "tag": "0006_past_moonstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789258125793,
+      "tag": "0007_aberrant_peter_quill",
+      "breakpoints": true
+    }
+  ]
+}
