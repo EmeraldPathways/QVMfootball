@@ -579,7 +579,9 @@ function derivedGoalMarkets(model: MatchProbabilities, lines: Array<typeof marke
   ];
   return definitions.map((definition) => {
     const trueProb = goalMarketProbability(model, definition.predicate);
-    const live = lines.find((line) => line.marketType === definition.marketType && line.selection === definition.selection && (line.line ?? 0) === definition.line);
+    const live = lines
+      .filter((line) => line.marketType === definition.marketType && line.selection === definition.selection && (line.line ?? 0) === definition.line)
+      .sort((left, right) => Date.parse(right.capturedAt) - Date.parse(left.capturedAt))[0];
     const marketOdds = live?.odds ?? null;
     const edgePct = marketOdds && marketOdds > 1 ? marketOdds / fairOdds(trueProb) - 1 : null;
     return { marketType: definition.marketType, selection: definition.selection, line: definition.line || null, fairOdds: round(fairOdds(trueProb), 3), trueProb: round(trueProb, 6), marketOdds, edgePct: edgePct === null ? null : round(edgePct, 6), action: edgePct !== null && edgePct > EDGE_THRESHOLD ? "BET" : "NO_BET" };
@@ -2755,7 +2757,7 @@ async function runtimeHasOddsKey() {
   return Boolean(runtime.ODDS_API_KEY);
 }
 
-export async function refreshOddsFromTheOddsAPI(db: QvmDb, league = LEAGUE_CONFIGS[0]) {
+export async function refreshOddsFromTheOddsAPI(db: QvmDb, league = LEAGUE_CONFIGS[0], rebuild = true) {
   await ensureSeeded(db);
   const runtime = await getRuntimeEnv();
   if (!runtime.ODDS_API_KEY) {
@@ -2831,29 +2833,37 @@ export async function refreshOddsFromTheOddsAPI(db: QvmDb, league = LEAGUE_CONFI
           fixture = (await getFixtureRows(db)).find((row) => row.homeTeamId === home.id && row.awayTeamId === away.id && row.matchDate === matchDate && row.league === league.name);
         }
       }
-      const h2hMarket = event.bookmakers
-        ?.flatMap((bookmaker) =>
-          (bookmaker.markets ?? []).map((item) => ({ bookmaker, item })),
-        )
-        .find((entry) => entry.item.key === "h2h");
-      const outcomes = h2hMarket?.item.outcomes ?? [];
-      const outcomePrice = (name: string) =>
-        outcomes.find(
-          (outcome) =>
-            normaliseName(outcome.name ?? "") === normaliseName(name),
+      // Aggregate valid h2h markets instead of silently selecting the first
+      // bookmaker. This keeps the displayed price real while preserving the
+      // breadth of the source for quality gating.
+      const h2hBooks = (event.bookmakers ?? []).flatMap((bookmaker) => {
+        const market = (bookmaker.markets ?? []).find((item) => item.key === "h2h");
+        const outcomes = market?.outcomes ?? [];
+        const priceFor = (name: string) => outcomes.find(
+          (outcome) => normaliseName(outcome.name ?? "") === normaliseName(name),
         )?.price;
-      const homeOdds = outcomePrice(event.home_team ?? "");
-      const awayOdds = outcomePrice(event.away_team ?? "");
-      const drawOdds = outcomes.find(
-        (outcome) => normaliseName(outcome.name ?? "") === "draw",
-      )?.price;
+        const homePrice = priceFor(event.home_team ?? "");
+        const awayPrice = priceFor(event.away_team ?? "");
+        const drawPrice = outcomes.find(
+          (outcome) => normaliseName(outcome.name ?? "") === "draw",
+        )?.price;
+        return typeof homePrice === "number" && homePrice > 1 &&
+          typeof drawPrice === "number" && drawPrice > 1 &&
+          typeof awayPrice === "number" && awayPrice > 1
+          ? [{ title: bookmaker.title ?? "The Odds API", homeOdds: homePrice, drawOdds: drawPrice, awayOdds: awayPrice }]
+          : [];
+      });
+      const bookmakerCount = h2hBooks.length;
+      const homeOdds = Math.max(...h2hBooks.map((book) => book.homeOdds), 0);
+      const drawOdds = Math.max(...h2hBooks.map((book) => book.drawOdds), 0);
+      const awayOdds = Math.max(...h2hBooks.map((book) => book.awayOdds), 0);
       if (!fixture || !homeOdds || !drawOdds || !awayOdds) continue;
       const consensus = devigProbabilities(homeOdds, drawOdds, awayOdds);
       await db
         .insert(marketQuotes)
         .values({
           fixtureId: fixture.id,
-          provider: h2hMarket?.bookmaker.title ?? "The Odds API",
+          provider: `The Odds API · ${bookmakerCount} bookmakers`,
           homeOdds,
           drawOdds,
           awayOdds,
@@ -2866,6 +2876,7 @@ export async function refreshOddsFromTheOddsAPI(db: QvmDb, league = LEAGUE_CONFI
           bestDrawOdds: drawOdds,
           bestAwayOdds: awayOdds,
           sourceConfidence: 0.8,
+          bookmakerCount,
         })
         .run();
       const lineValues = event.bookmakers?.flatMap((bookmaker) => (bookmaker.markets ?? []).flatMap((item) => {
@@ -2890,7 +2901,7 @@ export async function refreshOddsFromTheOddsAPI(db: QvmDb, league = LEAGUE_CONFI
       updated += 1;
     }
     await updateSourceHealth(db, "The Odds API", "READY", updated);
-    await rebuildPredictions(db, true);
+    if (rebuild) await rebuildPredictions(db, true);
     await logEvent(
       db,
       `${league.name} odds refresh completed from The Odds API: ` +
@@ -2913,7 +2924,7 @@ export async function refreshAllOddsFromTheOddsAPI(db: QvmDb) {
   const results: Array<{ league: string; updated: number; status: string; error?: string }> = [];
   for (const league of LEAGUE_CONFIGS) {
     try {
-      const result = await refreshOddsFromTheOddsAPI(db, league);
+      const result = await refreshOddsFromTheOddsAPI(db, league, false);
       results.push({ league: league.name, updated: result.updated, status: result.status });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown odds error";
@@ -2923,6 +2934,14 @@ export async function refreshAllOddsFromTheOddsAPI(db: QvmDb) {
   }
   const updated = results.reduce((sum, item) => sum + item.updated, 0);
   const failed = results.filter((item) => item.status !== "READY");
+  await rebuildPredictions(db, true);
+  await updateSourceHealth(
+    db,
+    "The Odds API",
+    failed.length === results.length ? "ERROR" : failed.length ? "PARTIAL" : "READY",
+    updated,
+    failed.length ? failed.map((item) => `${item.league}: ${item.error ?? item.status}`).join(" | ") : undefined,
+  );
   return {
     source: "The Odds API",
     updated,
@@ -2947,23 +2966,21 @@ export async function syncTodayData(db: QvmDb) {
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "Odds synchronisation failed.");
   }
-  try {
-    // Sportmonks is the sole football enrichment provider.
-    enrichment = await refreshSportmonks(db);
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : "API-Football enrichment failed.");
-  }
+  // Sportmonks carries large lineup/statistics payloads and has its own
+  // explicit refresh action. Do not let it block fresh odds reaching Edge
+  // Finder when the user presses the primary live-data refresh.
+  enrichment = {
+    source: "Sportmonks",
+    updated: 0,
+    status: "DEFERRED",
+    message: "Run Refresh football enrichment separately for lineups, injuries, xG and statistics.",
+  };
   await rebuildPredictions(db, true);
   const sourceNotReady = [fixtures, odds].some((result) => {
     if (!result || typeof result !== "object") return true;
     return (result as { status?: string }).status !== "READY";
   });
-  const enrichmentStatus = enrichment && typeof enrichment === "object"
-    ? (enrichment as { status?: string }).status
-    : "ERROR";
-  const enrichmentUnavailable = enrichmentStatus === "NOT_CONFIGURED";
-  const enrichmentNeedsAttention = ["ERROR", "PARTIAL"].includes(enrichmentStatus ?? "ERROR") && !enrichmentUnavailable;
-  const partial = errors.length > 0 || sourceNotReady || enrichmentNeedsAttention;
+  const partial = errors.length > 0 || sourceNotReady;
   await logEvent(
     db,
     partial
