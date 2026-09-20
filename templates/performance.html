@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-7"><p class="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Portfolio audit</p><h1 class="mt-2 text-3xl font-semibold">Performance Audit Hub</h1><p class="mt-2 text-slate-400">Settled wagers and running bankroll simulation.</p></div>
+<div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
+  <table class="w-full text-left text-sm"><thead class="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-5 py-4">Fixture</th><th class="px-5 py-4">Selection</th><th class="px-5 py-4">Odds</th><th class="px-5 py-4">Outcome</th><th class="px-5 py-4">CLV</th><th class="px-5 py-4">Net P&L</th><th class="px-5 py-4">Bankroll</th></tr></thead><tbody id="history"></tbody></table>
+</div>
+<script>
+async function load() {
+  const data = await (await fetch("/api/performance")).json();
+  document.getElementById("history").innerHTML = data.history.map(item => "<tr class='border-b border-slate-800/80'><td class='px-5 py-4'>" + item.match + "<span class='block mt-1 text-xs text-slate-500'>" + item.score + "</span></td><td class='px-5 py-4 text-indigo-200'>" + item.selection + "</td><td class='px-5 py-4'>" + item.market_odds.toFixed(2) + " → " + (item.closing_odds ? item.closing_odds.toFixed(2) : "—") + "</td><td class='px-5 py-4 " + (item.outcome === "WON" ? "text-emerald-300" : "text-rose-300") + "'>" + item.outcome + "</td><td class='px-5 py-4 " + (item.clv_pct >= 0 ? "text-emerald-300" : "text-rose-300") + "'>" + (item.clv_pct == null ? "—" : (item.clv_pct >= 0 ? "+" : "") + item.clv_pct.toFixed(2) + "%") + "</td><td class='px-5 py-4'>" + (item.profit_loss >= 0 ? "+" : "") + "€" + item.profit_loss.toFixed(2) + "</td><td class='px-5 py-4'>€" + item.running_bankroll.toFixed(2) + "</td></tr>").join("");
+}
+load();
+</script>
+{% endblock %}

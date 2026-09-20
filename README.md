@@ -48,7 +48,7 @@ If PowerShell blocks activation, run `Set-ExecutionPolicy -Scope Process -Execut
 
 ## Mathematical contract
 
-The model uses a 6×6 (0–5 goals) independent Poisson grid, the exact strength normalizations requested, direct fair decimal odds of 1 / probability, a strict edge threshold above 3%, and Quarter-Kelly stake sizing capped at 10% of bankroll. Paper-trading risk controls cap total open exposure at 30% of bankroll and exposure per fixture at 10%.
+The model uses a 6×6 (0–5 goals) independent Poisson grid, the exact strength normalizations requested, direct fair decimal odds of 1 / probability, a strict edge threshold above 3%, and Quarter-Kelly stake sizing capped at 10% of bankroll. Paper-trading risk controls cap total open exposure at 60% of bankroll and exposure per fixture at 10%.
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 
