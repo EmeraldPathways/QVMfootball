@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-7"><p class="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Opportunity surface</p><h1 class="mt-2 text-3xl font-semibold">Edge Finder</h1><p class="mt-2 text-slate-400">Market odds versus Poisson fair odds with conservative Quarter-Kelly sizing.</p></div>
+<div id="markets" class="grid gap-4"></div>
+<script>
+async function load() {
+  const data = await (await fetch("/api/markets")).json();
+  document.getElementById("markets").innerHTML = data.markets.map(market => {
+    const best = market.selections.reduce((a, b) => a.edge_pct > b.edge_pct ? a : b);
+    return "<article class='rounded-2xl border border-slate-800 bg-slate-900 p-5'><div class='flex flex-wrap items-center justify-between gap-3'><div><h2 class='font-medium'>" + market.home_team + " vs " + market.away_team + "</h2><p class='mt-1 text-sm text-slate-500'>" + new Date(market.match_date).toLocaleString() + "</p></div><span class='rounded-full bg-emerald-500/10 px-3 py-1 text-sm text-emerald-300'>" + (best.edge_pct * 100).toFixed(1) + "% edge</span></div><div class='mt-4 grid gap-3 sm:grid-cols-4 text-sm'><span>Side <b class='block mt-1 text-indigo-200'>" + best.selection + "</b></span><span>Market <b class='block mt-1'>" + best.market_odds.toFixed(2) + "</b></span><span>Fair <b class='block mt-1'>" + best.fair_odds.toFixed(2) + "</b></span><span>Stake <b class='block mt-1 text-emerald-300'>€" + best.suggested_stake.toFixed(2) + "</b></span></div></article>";
+  }).join("");
+}
+load();
+</script>
+{% endblock %}

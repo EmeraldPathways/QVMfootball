@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-7">
+  <p class="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">System overview</p>
+  <h1 class="mt-2 text-3xl font-semibold">Paper book, live signal</h1>
+  <p class="mt-2 text-slate-400">FastAPI parity surface for the D1-backed Site application.</p>
+</div>
+<div id="overview" class="grid gap-4 md:grid-cols-4">
+  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p class="text-sm text-slate-400">Current bankroll</p><p id="bankroll" class="mt-3 text-2xl font-semibold">Loading…</p></div>
+  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p class="text-sm text-slate-400">Placed bets</p><p id="bets" class="mt-3 text-2xl font-semibold">Loading…</p></div>
+  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p class="text-sm text-slate-400">Running ROI</p><p id="roi" class="mt-3 text-2xl font-semibold text-emerald-300">Loading…</p></div>
+  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5"><p class="text-sm text-slate-400">Win rate</p><p id="win-rate" class="mt-3 text-2xl font-semibold text-indigo-300">Loading…</p></div>
+</div>
+<div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+  <div class="flex items-center justify-between gap-4"><div><h2 class="font-medium">Active trades</h2><p class="mt-1 text-sm text-slate-500">Unresolved simulated positions</p></div><button onclick="scan()" class="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium hover:bg-indigo-400">Scan edges</button></div>
+  <div id="trades" class="mt-4 space-y-2 text-sm text-slate-300">Loading…</div>
+</div>
+<script>
+async function load() {
+  const response = await fetch("/api/overview");
+  const data = await response.json();
+  document.getElementById("bankroll").textContent = "€" + data.portfolio.current_bankroll.toFixed(2);
+  document.getElementById("bets").textContent = data.kpis.total_placed_bets;
+  document.getElementById("roi").textContent = data.portfolio.roi_pct.toFixed(1) + "%";
+  document.getElementById("win-rate").textContent = data.kpis.win_rate_pct.toFixed(1) + "%";
+  document.getElementById("trades").innerHTML = data.active_trades.length ? data.active_trades.map(item => "<div class='flex justify-between rounded-xl border border-slate-800 p-3'><span>" + item.match + " · " + item.selection + "</span><span class='text-emerald-300'>€" + item.stake.toFixed(2) + "</span></div>").join("") : "No open paper positions.";
+}
+async function scan() { await fetch("/api/scan", {method: "POST"}); await load(); }
+load();
+</script>
+{% endblock %}
